@@ -31,7 +31,5 @@ $ python3 make-submissons-dataset.py
 ```
 ## Data analysis
 
-![](https://github.com/khoi2312/tags-codeforces-dataset/blob/main/1.png)
-![](https://github.com/khoi2312/tags-codeforces-dataset/blob/main/2.png)
-
-View this [notebok](analysis.ipynb) for more information
+![](https://i.imgur.com/nE37aum.png)
+![](https://i.imgur.com/NHJL7Qy.png)
