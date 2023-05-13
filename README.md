@@ -29,3 +29,9 @@ From [Jur1cek Submission Dataset](https://github.com/Jur1cek/codeforces-dataset)
 ```sh
 $ python3 make-submissons-dataset.py
 ```
+## Data analysis
+
+![alt text](https://github.com/khoi2312/tags-codeforces-dataset/blob/main/infographic.png)
+
+More detail in [notebook](analysis.ipynb)
+
