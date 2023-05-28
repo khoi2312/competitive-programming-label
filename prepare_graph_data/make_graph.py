@@ -3,12 +3,14 @@ from pathlib import Path
 import logging
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 from collections import namedtuple
 
 import networkx as nx
 from tree_sitter import Parser, Node
 
 from common import draw_graph, initialize_cpp_tree_sitter, add_string_literal
+from make_pyg_graph import pyg_graph_dataset
 
 from torch_geometric.data import Data
 from torch_geometric.utils.convert import from_networkx
@@ -16,6 +18,7 @@ from torch_geometric.utils.convert import from_networkx
 
 StringLiteral = namedtuple('StringLiteral', ['value'])
 DATA_PATH = "../data/cpreprocess/"
+OUTPUT_DIR = "../data/source_code_graph/"
 FILE_NAMES = os.listdir(DATA_PATH)
 
 print(len(FILE_NAMES))
@@ -35,16 +38,16 @@ CPP_LANGUAGE = initialize_cpp_tree_sitter()
 parser = Parser()
 parser.set_language(CPP_LANGUAGE)
     
-def add_self_loop(G : nx.DiGraph, node : Node, edge_attr : str, color : str):
+def add_self_loop(G, node : Node, edge_attr : str, color : str):
     G.add_edge(node, node, type = edge_attr, color = color)
     return G
 
-def make_edge_attribute(G : nx.DiGraph, f_node : Node, s_node: Node, edge_attr : str, color : str):
+def make_edge_attribute(G, f_node : Node, s_node: Node, edge_attr : str, color : str):
     G.add_edge(f_node, s_node, type = edge_attr, color = color)
     return G
     
 def tree_to_graph(root):
-    G = nx.Graph()
+    G = nx.MultiDiGraph()
     
     todo = [root]
     NextTokenNodes = []
@@ -55,10 +58,6 @@ def tree_to_graph(root):
 
     FunctionDefinitionId = None
 
-    x = [[root.type, ""]]
-    edge_index = [[], []]
-    edge_attr = [[], []]
-
     # Make edges based on leaf nodes
     while todo:
         node = todo.pop()
@@ -66,7 +65,6 @@ def tree_to_graph(root):
         #print(node_text)
 
         G.add_node(node.id, label = add_string_literal(node.type))
-        x.append([node.type, node_text])
 
         # Return To Edges
         if node.type == "function_definition":
@@ -75,8 +73,6 @@ def tree_to_graph(root):
             edge_attr = "ReturnTo"
             if FunctionDefinitionId is not None:
                 G = make_edge_attribute(G, node.id, FunctionDefinitionId, edge_attr= edge_attr, color = EdgeColors[edge_attr])
-            #edge_index[0].append(node.id)
-            #edge_index[1].append(FunctionDefinitionId)
 
         # Leaf of AST Trees
         if node.children == []: #Last node in branch
@@ -140,47 +136,43 @@ def tree_to_graph(root):
 
 
 def ast_transform(source_code : str):
-    tree = parser.parse(bytes(source_code, "utf-8"))
-    root = tree.root_node
-    
-    ast = tree_to_graph(root)
-    
-    return ast
-
-def pyg_graph_transform(source_code : str):
-    logfile = open("log.txt", "a")
     try:
-        ast = ast_transform(source_code)
+        tree = parser.parse(bytes(source_code, "utf-8"))
+        root = tree.root_node
+        
+        ast = tree_to_graph(root)
     except:
-        #logfile.write(str(source_code) + "\n")
-        #logfile.write("______________")
         ast = None
-
-
-    #pyg_data = from_networkx(ast)
     
-    #print(pyg_data.edge_index)
-    #print(pyg_data.num_nodes)
-    #print(pyg_data.type)
-
     return ast
 
 def main():
-    er_contest = []
-    for fn in tqdm(FILE_NAMES[:]):
+    dataset = pyg_graph_dataset()
+    w_num = s_num = 0
+    
+    progress_bar = tqdm(FILE_NAMES[:])
+
+    for fn in progress_bar:
         
         df = pd.read_csv(open(DATA_PATH + fn, 'r'), encoding='utf-8', engine='c')
         
-        df["graph"] = df["source_code"].apply(lambda x : pyg_graph_transform(x))
+        df["ast_graph"] = df["source_code"].apply(lambda x : ast_transform(x))
 
         #with open("sample.cpp", "r") as infile:
         #    source_code = infile.read()
         
-        #src_code_graph = pyg_graph_transform(source_code)
+        #ast = ast_transform(source_code)
         #draw_graph(src_code_graph, "type")
-        #nx.drawing.nx_pydot.write_dot(src_code_graph, "sample.dot")
-        #break
+        #nx.drawing.nx_pydot.write_dot(ast, "sample.dot")
+        written_num, skip_num = dataset.parse(df["ast_graph"], df[""])
+        
+        w_num += written_num
+        s_num += skip_num
 
-if __name__ == "main":
+        progress_bar.set_postfix({"written" : w_num, "skip" : s_num})
+    
+    dataset.serialize(filename = fn, dest = OUTPUT_DIR)
+    
+if __name__ == "__main__":
     main()
 
